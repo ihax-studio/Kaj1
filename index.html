@@ -38,6 +38,11 @@ body {
     position: relative;
     padding: 20px;
     transition: background 0.3s ease;
+    /* Prevent Safari navigation gestures */
+    overscroll-behavior-x: none;
+    -webkit-overscroll-behavior-x: none;
+    touch-action: pan-y pinch-zoom;
+    -webkit-touch-action: pan-y pinch-zoom;
 }
 
 .bg-particles {
@@ -876,6 +881,11 @@ body {
     will-change: transform;
     transition: opacity 0.5s cubic-bezier(.62,0,.4,1);
     margin: 0 auto;
+    /* Prevent Safari navigation gestures */
+    touch-action: pan-x;
+    -webkit-touch-action: pan-x;
+    overscroll-behavior-x: none;
+    -webkit-overscroll-behavior-x: none;
 }
 
 .slider-wrapper.fade-out {
@@ -1404,12 +1414,57 @@ body {
     <source src="data:audio/wav;base64,UklGRvIAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0Ye4AAAAQNw==" type="audio/wav">
   </audio>
   <audio id="lowPowerAudio" preload="auto">
+    <source src="low_power.m4a" type="audio/aac">
     <source src="low_power.wav" type="audio/wav">
-    <source src="low_power.wav" type="audio/wav">
+    <source src="data:audio/wav;base64,UklGRvIAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0Ye4AAAAQNw==" type="audio/wav">
+  </audio>
+  <audio id="tockAudio" preload="auto">
+    <source src="tock.mp3" type="audio/mpeg">
+    <source src="tock.wav" type="audio/wav">
     <source src="data:audio/wav;base64,UklGRvIAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0Ye4AAAAQNw==" type="audio/wav">
   </audio>
 
   <script type="module">
+    // Prevent Safari navigation gestures
+    document.addEventListener('touchstart', function(e) {
+      // Prevent navigation when swiping from edges
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const x = touch.clientX;
+        const windowWidth = window.innerWidth;
+        
+        // If touch starts within 20px of either edge, prevent default
+        if (x < 20 || x > windowWidth - 20) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchmove', function(e) {
+      // Prevent horizontal scrolling on body
+      if (e.target === document.body) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    // Prevent back gesture on the entire page
+    let startX = null;
+    document.addEventListener('touchstart', function(e) {
+      startX = e.touches[0].clientX;
+    });
+    
+    document.addEventListener('touchmove', function(e) {
+      if (startX !== null) {
+        const currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX;
+        
+        // If swiping right from left edge, prevent it
+        if (startX < 50 && deltaX > 0) {
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+    
     // Import modules for device detection and haptics
     let detectOS, haptic;
     let isIOS = false;
@@ -1547,6 +1602,7 @@ body {
       win: document.getElementById('winAudio'),
       lose: document.getElementById('loseAudio'),
       lowPower: document.getElementById('lowPowerAudio'),
+      tock: document.getElementById('tockAudio'),
       
       play(type) {
         try {
@@ -1588,7 +1644,7 @@ body {
       
       // 全ての音声ファイルをテスト
       testAllAudio() {
-        const audioTypes = ['bgm', 'success', 'retry', 'fail', 'keyPress', 'clear', 'special', 'jackpot', 'win', 'lose', 'lowPower'];
+        const audioTypes = ['bgm', 'success', 'retry', 'fail', 'keyPress', 'clear', 'special', 'jackpot', 'win', 'lose', 'lowPower', 'tock'];
         audioTypes.forEach(type => {
           if (this[type]) {
             this[type].volume = 0.1;
@@ -1838,8 +1894,9 @@ body {
         chip.classList.add('selected');
         gameState.selectedChipValue = parseInt(chip.dataset.value);
         
-        // チップ選択時の振動
+        // チップ選択時の振動と音
         hapticPatterns.basic();
+        audioManager.play('tock');
         updateStatus();
         updateTopStatus();
       });
@@ -1861,8 +1918,9 @@ body {
         btn.classList.add('active');
         gameState.mode = btn.dataset.mode;
         
-        // モード切り替え時の振動
+        // モード切り替え時の振動と音
         hapticPatterns.confirm();
+        audioManager.play('tock');
       });
     });
     
@@ -1902,8 +1960,9 @@ body {
           // スライダーをアクティブに
           sliderWrapper.classList.remove('dimmed', 'balance-zero');
           
-          // 賭け成功時の振動
+          // 賭け成功時の振動と音
           hapticPatterns.basic();
+          audioManager.play('tock');
           updateStatus();
           updateTopStatus();
         } else {
@@ -2116,15 +2175,22 @@ body {
     
     // スライダーイベントリスナー
     sliderKnob.addEventListener("touchstart", e => {
+      e.preventDefault();
+      e.stopPropagation();
       if (e.touches && e.touches.length > 0) startSliderDrag(e.touches[0].clientX);
-    });
+    }, { passive: false });
     
     sliderKnob.addEventListener("mousedown", e => {
+      e.preventDefault();
       startSliderDrag(e.clientX);
       document.body.style.userSelect = "none";
     });
     
     sliderWrapper.addEventListener("touchmove", e => {
+      // Prevent default to block Safari navigation
+      e.preventDefault();
+      e.stopPropagation();
+      
       if (!sliderState.isDragging) return;
       const clientX = e.touches[0].clientX;
       let dx = clientX - sliderState.startX;
@@ -2134,7 +2200,7 @@ body {
         hapticPatterns.basic();
         sliderState.lastX = sliderState.knobX;
       }
-    });
+    }, { passive: false });
     
     window.addEventListener("mousemove", e => {
       if (!sliderState.isDragging) return;
@@ -2143,9 +2209,15 @@ body {
       sliderState.knobX = Math.max(0, Math.min(dx, sliderState.maxOffset));
     });
     
-    sliderWrapper.addEventListener("touchend", endSliderDrag);
+    sliderWrapper.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      endSliderDrag();
+    }, { passive: false });
     window.addEventListener("mouseup", endSliderDrag);
-    sliderWrapper.addEventListener('touchcancel', endSliderDrag);
+    sliderWrapper.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      endSliderDrag();
+    }, { passive: false });
     
     // スライダータップ機能（灰色状態 + 残高ゼロ状態）
     sliderWrapper.addEventListener("click", (e) => {
